@@ -112,7 +112,7 @@ def plot_monthly_income(transaction_data: pd.DataFrame) -> plotly.graph_objs.Fig
     return fig
 
 
-def plot_spending_by_subcategory(transaction_data) -> plotly.graph_objs.Figure:
+def plot_spending_per_subcategory(transaction_data) -> plotly.graph_objs.Figure:
     df = _to_spending(transaction_data)
 
     df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").astype(str)
@@ -127,6 +127,17 @@ def plot_spending_by_subcategory(transaction_data) -> plotly.graph_objs.Figure:
     return fig
 
 
+def plot_single_category_by_month_plotly(
+    transaction_data, category: str = "Shopping"
+) -> plotly.graph_objs.Figure:
+    df = transaction_data
+    df = df[df["Category"] == category]
+    df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").astype(str)
+    df = df.groupby(["Date"])["Amount"].sum().reset_index()
+    fig = px.bar(df, x="Date", y="Amount", title=f"Monthly Spending by {category}")
+    return fig
+
+
 def plot_single_category_by_month(
     df: pd.DataFrame, category: str = "Groceries"
 ) -> None:
@@ -135,12 +146,12 @@ def plot_single_category_by_month(
     df_grouped = groceries.groupby("month_year")["Amount"].sum()
 
     # Plot a histogram
-    plt.figure(figsize=(10, 6))
-    df_grouped.plot(kind="bar")
-    plt.xlabel("Month")
-    plt.ylabel("Total Amount")
-    plt.title("Total Amount by Month")
-    plt.show()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    df_grouped.plot(kind="bar", ax=ax)
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Total Amount")
+    ax.set_title("Total Amount by Month")
+    return fig
 
 
 def plot_categories_per_month(
