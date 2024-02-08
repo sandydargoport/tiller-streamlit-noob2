@@ -52,7 +52,13 @@ def main():
     st.plotly_chart(fig)
 
     st.header("Total Spending by Category")
-    fig = plot_categories(transaction_data)
+    year = st.selectbox(
+        "Select a year",
+        [None] + sorted(transaction_data["Date"].dt.year.unique(), reverse=True),
+    )
+    month = st.selectbox("Select a month", [None] + list(range(1, 13)))
+
+    fig = plot_categories(transaction_data, month, year)
     st.plotly_chart(fig)
 
 

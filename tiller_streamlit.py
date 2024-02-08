@@ -68,8 +68,14 @@ def _to_spending(transaction_data: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def plot_categories(transaction_data: pd.DataFrame) -> plotly.graph_objs.Figure:
+def plot_categories(
+    transaction_data: pd.DataFrame, month: int | None = None, year: int | None = None
+) -> plotly.graph_objs.Figure:
     df = _to_spending(transaction_data)
+    if month is not None:
+        df = df[df["Date"].dt.month == month]
+    if year is not None:
+        df = df[df["Date"].dt.year == year]
     return px.sunburst(
         df,
         path=[
