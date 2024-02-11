@@ -8,3 +8,8 @@ matplotlib
 python-dotenv
 streamlit
 nbformat
+seaborn
+hvplot
+bokeh==2.4.3
+param<2
+altair

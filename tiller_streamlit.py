@@ -1,20 +1,22 @@
+import os
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import plotly
+import plotly.express as px
+from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-import pandas as pd
-import plotly.express as px
-import plotly
-import matplotlib.pyplot as plt
-from dotenv import load_dotenv
-import os
+import altair as alt
 
 load_dotenv()
 
+SERVICE_ACCOUNT_FILE = os.environ["SERVICE_ACCOUNT_FILE"]
+SCOPES = os.environ["SCOPES"].split(",")
+SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
 
-def get_transaction_data():
-    SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
-    SCOPES = os.getenv("SCOPES").split(",")
-    SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 
+def get_sheet(range: str):
     credentials = Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE, scopes=SCOPES
     )
@@ -23,10 +25,11 @@ def get_transaction_data():
 
     # Call the Sheets API
     sheet = service.spreadsheets()
-    result = (
-        sheet.values().get(spreadsheetId=SPREADSHEET_ID, range="Transactions").execute()
-    )
+    return sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range).execute()
 
+
+def get_transaction_data():
+    result = get_sheet(range="Transactions")
     values = result.get("values", [])
     return values
 
@@ -186,3 +189,55 @@ def plot_total_spending_per_month(
     df = df.groupby("Date")["Amount"].sum().reset_index()
     fig = px.bar(df, x="Date", y="Amount", title="Monthly Spending")
     return fig
+
+
+def plot_comparative_spending(df: pd.DataFrame, n_last_months: int = 3):
+    df = df[df["Category"] != "Paycheck"]
+    df = df[df["Category"] != "Investments in Stocks"]
+    df = df[df["Category"] != "Investments in Crypto"]
+    df["Amount"] = -df["Amount"]
+
+    df_ = df.groupby(df["Date"].dt.date)["Amount"].sum().reset_index()
+    df_["Date"] = pd.to_datetime(df_["Date"])
+    df_["day"] = df_["Date"].dt.day
+    df_["cumsum"] = df_.groupby(df_["Date"].dt.to_period("M"))["Amount"].cumsum()
+
+    most_recent_month = df_["Date"].dt.to_period("M").max()
+    df_["Relative Month"] = (most_recent_month - df_["Date"].dt.to_period("M")).apply(
+        lambda x: f"{x.n} months ago"
+    )
+    df_["Relative Month"] += ", " + df_["Date"].dt.strftime("%Y-%m")
+    this_month_str = f"This Month, {most_recent_month.strftime('%Y-%m')}"
+    df_.loc[
+        df_["Relative Month"].str.contains("0 months ago"), "Relative Month"
+    ] = this_month_str
+    df_ = df_[df_["Date"] >= df_["Date"].max() - pd.DateOffset(months=n_last_months)]
+
+    chart = (
+        alt.Chart(df_[["day", "cumsum", "Relative Month"]])
+        .mark_line(point=True)
+        .encode(
+            x="day:Q",
+            y="cumsum:Q",
+            color=alt.Color(
+                "Relative Month:N", legend=alt.Legend(title="Relative Month")
+            ),
+            tooltip=["day", "cumsum", "Relative Month"],
+            strokeDash=alt.condition(
+                alt.datum["Relative Month"] == this_month_str,
+                alt.value([0]),  # solid line for current month
+                alt.value([5, 5]),  # dashed line for previous months
+            ),
+            opacity=alt.condition(
+                alt.datum["Relative Month"] == this_month_str,
+                alt.value(1),  # full opacity for current month
+                alt.value(0.5),  # half opacity for previous months
+            ),
+        )
+        .properties(
+            title="Cumulative Spending Per Day Over the Last N Months",
+            width=600,
+            height=400,
+        )
+    )
+    return chart
