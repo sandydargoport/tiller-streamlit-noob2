@@ -28,6 +28,25 @@ def get_sheet(range: str):
     return sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range).execute()
 
 
+def get_categories():
+    values = get_sheet(range="Categories")["values"]
+    df = pd.DataFrame(values[1:], columns=values[0])
+    category_to_group = {}
+    group_to_category = {}
+    for i, row in df.iterrows():
+        category_to_group[row.Category] = row.Group
+        group_to_category.setdefault(row.Group, []).append(row.Category)
+    return category_to_group, group_to_category
+
+
+def _add_category_group(transaction_data: pd.DataFrame) -> pd.DataFrame:
+    category_to_group, group_to_category = get_categories()
+    transaction_data["Group"] = transaction_data["Category"].apply(
+        lambda x: category_to_group.get(x, "")
+    )
+    return transaction_data
+
+
 def get_transaction_data():
     result = get_sheet(range="Transactions")
     values = result.get("values", [])
@@ -40,6 +59,7 @@ def get_transaction_data_df():
     df["Date"] = pd.to_datetime(df["Date"])
     df["Amount"] = df["Amount"].apply(clean_amount)
     _add_per_category_amount(df)
+    _add_category_group(df)
     df["month_year"] = df["Date"].dt.to_period("M")
     return df
 
@@ -71,7 +91,10 @@ def _to_spending(transaction_data: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_categories(
-    transaction_data: pd.DataFrame, month: int | None = None, year: int | None = None
+    transaction_data: pd.DataFrame,
+    month: int | None = None,
+    year: int | None = None,
+    with_group: bool = False,
 ) -> plotly.graph_objs.Figure:
     df = _to_spending(transaction_data)
     if month is not None:
@@ -79,11 +102,10 @@ def plot_categories(
     if year is not None:
         df = df[df["Date"].dt.year == year]
     df["Percent"] = df["amount_category_pct"].apply(lambda x: f"{x:.2f}%")
+    path = ["Category"] if not with_group else ["Group", "Category"]
     return px.sunburst(
         df,
-        path=[
-            "Category",
-        ],
+        path=path,
         values="Amount",
         hover_data=["Amount", "Percent"],
     )
