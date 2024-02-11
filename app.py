@@ -39,10 +39,10 @@ def main():
     )
     st.plotly_chart(fig)
 
+    st.header("Histogram of amount per category")
     category = st.selectbox(
         "Select a category", categories, index=categories.index("Shopping")
     )
-    st.header(f"Spending in category: {category}")
     fig = plot_category_histogram(transaction_data, category)
     st.plotly_chart(fig)
 

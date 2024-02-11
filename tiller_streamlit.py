@@ -64,9 +64,8 @@ def _to_spending(transaction_data: pd.DataFrame) -> pd.DataFrame:
         & (df["Category"] != "Investments in Crypto")
     ]
     df["amount_pct"] = df["Amount"] / df["Amount"].sum() * 100
-    df["amount_category_pct"] = (
-        df["amount_category"] / df["amount_category"].sum() * 100
-    )
+    total = df["Amount"].sum()
+    df["amount_category_pct"] = df["amount_category"] / total * 100
     df["Amount"] = -df["Amount"]
     return df
 
@@ -79,12 +78,14 @@ def plot_categories(
         df = df[df["Date"].dt.month == month]
     if year is not None:
         df = df[df["Date"].dt.year == year]
+    df["Percent"] = df["amount_category_pct"].apply(lambda x: f"{x:.2f}%")
     return px.sunburst(
         df,
         path=[
             "Category",
         ],
         values="Amount",
+        hover_data=["Amount", "Percent"],
     )
 
 
