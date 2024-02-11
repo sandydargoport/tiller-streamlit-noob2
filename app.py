@@ -19,7 +19,7 @@ def main():
     categories = sorted(transaction_data["Category"].unique())
 
     st.header("Monthly Comparative Spending")
-    months_to_compare = st.sidebar.selectbox(
+    months_to_compare = st.selectbox(
         "Compare with previous n months:", [1, 2, 3, 4, 5, 6], index=2
     )
     fig = plot_comparative_spending(transaction_data, months_to_compare)
