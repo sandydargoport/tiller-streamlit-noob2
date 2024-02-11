@@ -1,5 +1,6 @@
 import os
 
+import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly
@@ -16,23 +17,24 @@ SCOPES = os.environ["SCOPES"].split(",")
 SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
 
 
-def get_sheet(range: str):
+def get_sheet(range: str) -> dict:
     credentials = Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE, scopes=SCOPES
     )
-
     service = build("sheets", "v4", credentials=credentials)
-
-    # Call the Sheets API
-    sheet = service.spreadsheets()
+    sheet = service.spreadsheets()  # Call the Sheets API
     return sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range).execute()
 
 
-def get_categories():
-    values = get_sheet(range="Categories")["values"]
-    df = pd.DataFrame(values[1:], columns=values[0])
-    category_to_group = {}
-    group_to_category = {}
+def sheet_as_df(range: str) -> pd.DataFrame:
+    values = get_sheet(range)["values"]
+    return pd.DataFrame(values[1:], columns=values[0])
+
+
+def get_categories() -> tuple[dict[str, str], dict[str, list[str]]]:
+    df = sheet_as_df("Categories")
+    category_to_group: dict[str, str] = {}
+    group_to_category: dict[str, list[str]] = {}
     for i, row in df.iterrows():
         category_to_group[row.Category] = row.Group
         group_to_category.setdefault(row.Group, []).append(row.Category)
@@ -47,15 +49,8 @@ def _add_category_group(transaction_data: pd.DataFrame) -> pd.DataFrame:
     return transaction_data
 
 
-def get_transaction_data():
-    result = get_sheet(range="Transactions")
-    values = result.get("values", [])
-    return values
-
-
-def get_transaction_data_df():
-    values = get_transaction_data()
-    df = pd.DataFrame(values[1:], columns=values[0])
+def get_transaction_data_df() -> pd.DataFrame:
+    df = sheet_as_df("Transactions")
     df["Date"] = pd.to_datetime(df["Date"])
     df["Amount"] = df["Amount"].apply(clean_amount)
     _add_per_category_amount(df)
@@ -64,7 +59,7 @@ def get_transaction_data_df():
     return df
 
 
-def clean_amount(x):
+def clean_amount(x: str) -> float:
     # change e.g., $3,200.00 to 3200.00 in Amount column
     return float(x.replace("$", "").replace(",", ""))
 
@@ -172,7 +167,7 @@ def plot_single_category_by_month_plotly(
 
 def plot_single_category_by_month(
     df: pd.DataFrame, category: str = "Groceries"
-) -> None:
+) -> matplotlib.figure.Figure:
     groceries = single_category(df, category)
     groceries["month_year"] = groceries["Date"].dt.to_period("M")
     df_grouped = groceries.groupby("month_year")["Amount"].sum()
@@ -214,7 +209,7 @@ def plot_total_spending_per_month(
     return fig
 
 
-def plot_comparative_spending(df: pd.DataFrame, n_last_months: int = 3):
+def plot_comparative_spending(df: pd.DataFrame, n_last_months: int = 3) -> alt.Chart:
     df = df[df["Category"] != "Paycheck"]
     df = df[df["Category"] != "Investments in Stocks"]
     df = df[df["Category"] != "Investments in Crypto"]
