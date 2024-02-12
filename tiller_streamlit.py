@@ -85,6 +85,51 @@ def _to_spending(transaction_data: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_balance_history() -> pd.DataFrame:
+    df = sheet_as_df("Balance History")
+    df["Balance"] = df.Balance.str.replace(",", "").str.replace("$", "").astype(float)
+    df["Date"] = pd.to_datetime(df["Date"])
+    return df
+
+
+def resampled_balance_history(df: pd.DataFrame) -> pd.DataFrame:
+    # Resolve duplicates by taking the last snapshot for each day for each account
+    df_ = df.drop_duplicates(subset=["Account ID", "Date"], keep="last")
+
+    # Sort by 'Account ID' and 'Date'
+    df_ = df_.sort_values(by=["Account ID", "Date"])
+
+    # Extend the DataFrame to include the current date for each account
+    current_date = pd.to_datetime("today").normalize()  # Normalize to remove time
+    idx = pd.date_range(start=df_["Date"].min(), end=current_date, freq="D")
+    df_ = df_.set_index("Date")
+
+    # Function to process each group
+    def process_group(group):
+        group = group.reindex(idx)  # Reindex without filling
+        # Forward fill the non-balance columns if there are any
+        non_balance_columns = group.drop(columns=["Balance"]).columns
+        group[non_balance_columns] = (
+            group[non_balance_columns].infer_objects(copy=False).ffill().bfill()
+        )
+        # Interpolate the 'Balance' column
+        group["Balance"] = group["Balance"].interpolate(
+            method="linear", limit_direction="forward"
+        )
+        group["Balance"] = group["Balance"].fillna(0)
+        return group
+
+    # Apply the function to each account group
+    df_processed = df_.groupby("Account ID", group_keys=True).apply(
+        process_group, include_groups=False
+    )
+
+    # Reset index to bring 'Date' back as a column
+    df_processed.reset_index(inplace=True)
+    df_processed["Date"] = df_processed.pop("level_1")
+    return df_processed
+
+
 def plot_categories(
     transaction_data: pd.DataFrame,
     month: int | None = None,
@@ -259,3 +304,73 @@ def plot_comparative_spending(df: pd.DataFrame, n_last_months: int = 3) -> alt.C
         )
     )
     return chart
+
+
+def plot_monthly_total_and_account_balances(
+    balance_data: pd.DataFrame, skip_accounts: list[str] | None = None
+) -> plotly.graph_objs.Figure:
+    balance_data = balance_data[balance_data["Balance"] >= 0]
+    if skip_accounts:
+        balance_data = balance_data[~balance_data["Account"].isin(skip_accounts)]
+
+    # Convert date to month and ensure it's in a suitable format for grouping
+    balance_data["Month"] = (
+        pd.to_datetime(balance_data["Date"]).dt.to_period("M").astype(str)
+    )
+
+    # Group by month and account, summing balances
+    df = balance_data.groupby(["Month", "Account"])["Balance"].first().reset_index()
+
+    # Plot using Plotly Express
+    fig = px.bar(
+        df,
+        x="Month",
+        y="Balance",
+        color="Account",
+        title="Monthly Total and Account Balances",
+        labels={"Balance": "Total Balance", "Month": "Month", "Account": "Account"},
+        text="Balance",
+    )
+
+    # Make the bars stacked
+    fig.update_layout(
+        barmode="stack",
+        xaxis_tickangle=-45,
+        xaxis_title="Month",
+        yaxis_title="Total Balance",
+        xaxis=dict(type="category"),
+        yaxis=dict(type="linear"),
+    )
+
+    # Optional: Format the balance text on the bars for better readability
+    fig.update_traces(texttemplate="%{text:.2s}", textposition="inside")
+
+    return fig
+
+
+def plot_net_worth_over_time(df_resampled_balance_history: pd.DataFrame) -> px.line:
+    net_worth_over_time = (
+        df_resampled_balance_history.groupby("Date")["Balance"].sum().reset_index()
+    )
+
+    fig = px.line(
+        net_worth_over_time,  # Data
+        x="Date",  # X-axis
+        y="Balance",  # Y-axis
+        title="Net Worth Over Time",
+        labels={"Balance": "Net Worth", "Date": "Date"},  # Customizing axis labels
+    )
+
+    # Customize the layout
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Net Worth",
+        xaxis=dict(tickangle=-45),  # Rotate labels for better readability
+        yaxis=dict(range=[0, net_worth_over_time["Balance"].max() * 1.1]),
+    )
+
+    # Adding grid lines for better readability, similar to plt.grid(True) in matplotlib
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="lightgrey")
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="lightgrey")
+
+    return fig

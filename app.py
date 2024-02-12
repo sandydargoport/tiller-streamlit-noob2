@@ -9,6 +9,10 @@ from tiller_streamlit import (
     plot_single_category_by_month_plotly,
     plot_monthly_income,
     plot_comparative_spending,
+    get_balance_history,
+    resampled_balance_history,
+    plot_net_worth_over_time,
+    plot_monthly_total_and_account_balances,
 )
 
 
@@ -31,6 +35,15 @@ def main():
 
     transaction_data = get_transaction_data_df()
     categories = sorted(transaction_data["Category"].unique())
+
+    header("Net worth over time")
+    df_balance_history = get_balance_history()
+    df_nw = resampled_balance_history(df_balance_history)
+    fig = plot_monthly_total_and_account_balances(df_nw)
+    st.plotly_chart(fig)
+
+    fig = plot_net_worth_over_time(df_nw)
+    st.plotly_chart(fig)
 
     header("Monthly Comparative Spending")
     months_to_compare = st.selectbox(
