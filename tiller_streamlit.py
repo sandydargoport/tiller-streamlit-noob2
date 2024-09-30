@@ -1,3 +1,4 @@
+import calendar
 import os
 
 import matplotlib
@@ -250,15 +251,15 @@ def plot_categories_per_month(
 def plot_total_spending_per_month(
     transaction_data: pd.DataFrame,
     skip_categories: list[str] | None = None,
-    n_months_moving_avg: int = 3,
+    n_months_moving_avg: list[int] = [3],
 ) -> plotly.graph_objs.Figure:
     # Filter and process spending data
     df = _to_spending(transaction_data)
     if skip_categories:
         df = df[~df["Category"].isin(skip_categories)]
 
-    # Convert the Date column to a monthly period
-    df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").astype(str)
+    # Convert the Date column to a monthly period (without converting to string)
+    df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M")
 
     # Group by month and calculate the total spending per month
     df_monthly = df.groupby("Date")["Amount"].sum().reset_index()
@@ -266,26 +267,44 @@ def plot_total_spending_per_month(
     # Sort by date to ensure correct moving average calculation
     df_monthly = df_monthly.sort_values(by="Date")
 
-    # Calculate the moving average over the specified number of months
-    df_monthly["Moving_Avg"] = (
-        df_monthly["Amount"].rolling(window=n_months_moving_avg).mean()
-    )
+    # Convert Period to string for Plotly
+    df_monthly["Date"] = df_monthly["Date"].astype(str)
+
+    # Identify the last month in the data
+    last_month = df_monthly["Date"].max()
+
+    # Check if today is the last day of the month
+    today = pd.to_datetime("today")
+    current_month = today.strftime("%Y-%m")
+
+    # If today is not the last day of the current month, exclude the current month from moving average calculation
+    if last_month == current_month:
+        df_monthly_no_incomplete = df_monthly[df_monthly["Date"] != last_month]
+    else:
+        df_monthly_no_incomplete = df_monthly.copy()
 
     # Create the bar plot for monthly spending
     fig = px.bar(df_monthly, x="Date", y="Amount", title="Monthly Spending")
 
-    # Add a line for the moving average
-    fig.add_scatter(
-        x=df_monthly["Date"],
-        y=df_monthly["Moving_Avg"],
-        mode="lines",
-        name=f"{n_months_moving_avg}-Month Moving Average",
-        line=dict(color="orange", width=2),
-    )
+    # Loop through each value in the n_months_moving_avg list and compute the moving average
+    for n_months in n_months_moving_avg:
+        # Calculate the moving average for the current n_months, excluding incomplete months
+        avg = df_monthly_no_incomplete["Amount"].rolling(window=n_months).mean()
+        df_monthly_no_incomplete = df_monthly_no_incomplete.copy()
+        df_monthly_no_incomplete[f"Moving_Avg_{n_months}"] = avg
+
+        # Add a line for the current moving average
+        fig.add_scatter(
+            x=df_monthly_no_incomplete["Date"],
+            y=df_monthly_no_incomplete[f"Moving_Avg_{n_months}"],
+            mode="lines",
+            name=f"{n_months}-Month Moving Average",
+            line=dict(width=2),  # You can customize colors here if desired
+        )
 
     # Customize the layout
     fig.update_layout(
-        title="Monthly Spending with Moving Average",
+        title="Monthly Spending with Multiple Moving Averages (Excluding Incomplete Months)",
         xaxis_title="Date",
         yaxis_title="Amount",
         xaxis_tickangle=-45,
