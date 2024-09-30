@@ -19,40 +19,103 @@ from tiller_streamlit import (
 
 
 def toc(headers):
-    # Iterate over existing headers and create a TOC
-    st.sidebar.title("Table of contents")
+    """
+    Generates a Table of Contents in the sidebar based on the headers list.
+
+    Args:
+        headers (list): List of header titles.
+    """
+    st.sidebar.title("Table of Contents")
     st.sidebar.markdown(
-        "\n".join([f"- [{i}](#{i.lower().replace(' ', '-')})" for i in headers])
+        "\n".join(
+            [f"- [{header}](#{header.lower().replace(' ', '-')})" for header in headers]
+        )
     )
 
 
 def main():
+    """
+    The main function orchestrates the layout of the Streamlit app by calling
+    individual plotting functions for each section.
+    """
     st.title("Tiller Money Streamlit App")
 
     headers = []
 
     def header(s):
+        """
+        Sets a header and appends it to the headers list for TOC.
+
+        Args:
+            s (str): The header title.
+        """
         headers.append(s)
         st.header(s)
 
+    # Fetch transaction data once to use across multiple plots
     transaction_data = get_transaction_data_df()
     categories = sorted(transaction_data["Category"].unique())
 
-    header("Net worth over time")
+    # Plot Sections
+    plot_net_worth_section(transaction_data, header)
+    plot_monthly_comparative_spending_section(transaction_data, header)
+    plot_monthly_spending_by_category_section(transaction_data, categories, header)
+    plot_monthly_spending_section(transaction_data, categories, header)
+    plot_histogram_section(transaction_data, categories, header)
+    plot_spending_by_subcategory_section(transaction_data, categories, header)
+    plot_monthly_income_section(transaction_data, header)
+    plot_total_spending_pie_chart_section(transaction_data, header)
+
+    # Generate Table of Contents
+    toc(headers)
+
+
+def plot_net_worth_section(transaction_data, header_func):
+    """
+    Renders the "Net worth over time" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        header_func (function): Function to set headers.
+    """
+    header_func("Net worth over time")
     df_balance_history = get_balance_history()
     df_nw = resampled_balance_history(df_balance_history)
-    fig = plot_monthly_total_and_account_balances(df_nw)
-    st.plotly_chart(fig)
+    fig1 = plot_monthly_total_and_account_balances(df_nw)
+    st.plotly_chart(fig1, use_container_width=True)
 
-    fig = plot_net_worth_over_time(df_nw)
-    st.plotly_chart(fig)
+    fig2 = plot_net_worth_over_time(df_nw)
+    st.plotly_chart(fig2, use_container_width=True)
 
-    header("Monthly Comparative Spending")
+
+def plot_monthly_comparative_spending_section(transaction_data, header_func):
+    """
+    Renders the "Monthly Comparative Spending" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        header_func (function): Function to set headers.
+    """
+    header_func("Monthly Comparative Spending")
     months_to_compare = st.selectbox(
         "Compare with previous n months:", [1, 2, 3, 4, 5, 6], index=2
     )
     fig = plot_comparative_spending(transaction_data, months_to_compare)
-    st.altair_chart(fig)
+    st.altair_chart(fig, use_container_width=True)
+
+
+def plot_monthly_spending_by_category_section(
+    transaction_data, categories, header_func
+):
+    """
+    Renders the "Monthly Spending by Category" section with optional moving average.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        categories (list): List of unique categories.
+        header_func (function): Function to set headers.
+    """
+    header_func("Monthly Spending by Category")
 
     # Allow users to exclude certain categories
     skip_categories = st.multiselect("Exclude categories", categories, default=["Rent"])
@@ -76,55 +139,111 @@ def main():
 
     # Pass the moving average parameter to the plotting function
     fig = plot_categories_per_month(
-        transaction_data,
-        skip_categories=skip_categories,
-        n_months_ma=n_months_ma,  # Ensure this parameter is passed
+        transaction_data, skip_categories=skip_categories, n_months_ma=n_months_ma
     )
 
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
-    header("Monthly Spending")
+
+def plot_monthly_spending_section(transaction_data, categories, header_func):
+    """
+    Renders the "Monthly Spending" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        categories (list): List of unique categories.
+        header_func (function): Function to set headers.
+    """
+    header_func("Monthly Spending")
+
+    # Allow users to exclude certain categories
     skip_categories = st.multiselect(
-        "Exclude categories from spending", categories, default=["Rent"]
+        "Exclude categories from spending",
+        categories,
+        default=["Rent"],
+        key="spending_exclude",
     )
+
     fig = plot_total_spending_per_month(
         transaction_data,
         skip_categories=skip_categories,
         n_months_moving_avg=[3, 6, 12],
     )
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
-    header("Histogram of amount per category")
+
+def plot_histogram_section(transaction_data, categories, header_func):
+    """
+    Renders the "Histogram of amount per category" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        categories (list): List of unique categories.
+        header_func (function): Function to set headers.
+    """
+    header_func("Histogram of amount per category")
     category = st.selectbox(
-        "Select a category", categories, index=categories.index("Shopping")
+        "Select a category",
+        categories,
+        index=categories.index("Shopping") if "Shopping" in categories else 0,
     )
     fig = plot_category_histogram(transaction_data, category)
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
-    header("Spending by Subcategory")
+
+def plot_spending_by_subcategory_section(transaction_data, categories, header_func):
+    """
+    Renders the "Spending by Subcategory" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        categories (list): List of unique categories.
+        header_func (function): Function to set headers.
+    """
+    header_func("Spending by Subcategory")
     category = st.selectbox(
-        "Select a category", categories, index=categories.index("Shopping"), key=0
+        "Select a category",
+        categories,
+        index=categories.index("Shopping") if "Shopping" in categories else 0,
+        key="subcategory_select",
     )
     fig = plot_single_category_by_month_plotly(transaction_data, category)
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
+
     fig = plot_spending_per_subcategory(transaction_data)
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
-    header("Monthly Income")
+
+def plot_monthly_income_section(transaction_data, header_func):
+    """
+    Renders the "Monthly Income" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        header_func (function): Function to set headers.
+    """
+    header_func("Monthly Income")
     fig = plot_monthly_income(transaction_data)
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
-    header("Total Spending Pie Chart")
+
+def plot_total_spending_pie_chart_section(transaction_data, header_func):
+    """
+    Renders the "Total Spending Pie Chart" section.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        header_func (function): Function to set headers.
+    """
+    header_func("Total Spending Pie Chart")
     year = st.selectbox(
         "Select a year",
         [None] + sorted(transaction_data["Date"].dt.year.unique(), reverse=True),
     )
     month = st.selectbox("Select a month", [None] + list(range(1, 13)))
-    with_group = st.checkbox("Group by category", value=False)
+    with_group = st.checkbox("Group by category", value=False, key="pie_group")
     fig = plot_categories(transaction_data, month, year, with_group=with_group)
-    st.plotly_chart(fig)
-
-    toc(headers)
+    st.plotly_chart(fig, use_container_width=True)
 
 
 if __name__ == "__main__":

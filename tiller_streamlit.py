@@ -1,15 +1,16 @@
+import calendar
 import os
+from datetime import datetime
 
+import altair as alt
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly
 import plotly.express as px
-import plotly.graph_objects as go
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-import altair as alt
 
 load_dotenv()
 
@@ -238,10 +239,12 @@ def plot_single_category_by_month(
 def plot_categories_per_month(
     transaction_data: pd.DataFrame,
     skip_categories: list[str] | None = None,
-    n_months_ma: int | None = None
+    n_months_ma: int | None = None,
 ) -> plotly.graph_objs.Figure:
     """
     Plots monthly spending by category with an optional moving average.
+    If a moving average is specified, replaces the original spending bars with the moving average values,
+    excluding the current month if it's incomplete.
 
     Args:
         transaction_data (pd.DataFrame): The transaction data.
@@ -256,30 +259,52 @@ def plot_categories_per_month(
     if skip_categories:
         df = df[~df["Category"].isin(skip_categories)]
 
-    # Convert Date to monthly timestamp and sort
+    # Convert Date to monthly timestamp (start of the month) and sort
     df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").dt.to_timestamp()
     df = df.sort_values("Date")
 
     # Aggregate spending per month and category
     df_grouped = df.groupby(["Date", "Category"])["Amount"].sum().reset_index()
 
-    # If moving average is specified, calculate and replace 'Amount' with moving average
+    plot_title = "Monthly Spending by Category"
+
     if n_months_ma and n_months_ma > 1:
+        # Identify the latest month in the data
+        latest_date_in_data = df_grouped["Date"].max()
+        today = datetime.today()
+        current_month = today.month
+        current_year = today.year
+
+        # Check if the latest month in data is the current month
+        is_latest_month_current = (
+            latest_date_in_data.month == current_month
+            and latest_date_in_data.year == current_year
+        )
+
+        # Check if today is the last day of the month
+        last_day_of_current_month = calendar.monthrange(current_year, current_month)[1]
+        is_month_complete = today.day == last_day_of_current_month
+
+        if is_latest_month_current and not is_month_complete:
+            # Exclude the incomplete current month from the data
+            df_grouped = df_grouped[df_grouped["Date"] < latest_date_in_data]
+            plot_title += " (Excluding Incomplete Current Month)"
+
         # Sort the DataFrame by Category and Date to ensure correct rolling calculation
-        df_grouped = df_grouped.sort_values(['Category', 'Date'])
+        df_grouped = df_grouped.sort_values(["Category", "Date"])
 
         # Calculate the moving average per Category
-        df_grouped['Moving_Avg'] = df_grouped.groupby('Category')['Amount'].transform(
+        df_grouped["Moving_Avg"] = df_grouped.groupby("Category")["Amount"].transform(
             lambda x: x.rolling(window=n_months_ma, min_periods=1).mean()
         )
 
         # Replace 'Amount' with 'Moving_Avg' for plotting
-        df_grouped['Amount'] = df_grouped['Moving_Avg']
+        df_grouped["Amount"] = df_grouped["Moving_Avg"]
 
         # Update the plot title to indicate moving average
-        plot_title = f"Monthly Spending by Category ({n_months_ma}-Month Moving Average)"
-    else:
-        plot_title = "Monthly Spending by Category"
+        plot_title = (
+            f"Monthly Spending by Category ({n_months_ma}-Month Moving Average)"
+        )
 
     # Create the bar chart
     fig = px.bar(
@@ -289,14 +314,14 @@ def plot_categories_per_month(
         color="Category",
         title=plot_title,
         labels={"Amount": "Spending ($)", "Date": "Month"},
-        hover_data={"Date": "|%B %Y", "Amount": ":,.2f"}
+        hover_data={"Date": "|%B %Y", "Amount": ":,.2f"},
     )
 
     # Customize layout for better readability
     fig.update_layout(
         xaxis=dict(tickformat="%b %Y", tickangle=-45),
         yaxis_title="Spending ($)",
-        hovermode="x unified"
+        hovermode="x unified",
     )
 
     return fig
