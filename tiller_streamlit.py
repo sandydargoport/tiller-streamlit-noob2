@@ -450,17 +450,41 @@ def plot_comparative_spending(df: pd.DataFrame, n_last_months: int = 3) -> alt.C
 def plot_monthly_total_and_account_balances(
     balance_data: pd.DataFrame, skip_accounts: list[str] | None = None
 ) -> plotly.graph_objs.Figure:
+    """
+    Plots a stacked bar chart of monthly total and account balances with ordered segments and enhanced labels.
+
+    Args:
+        balance_data (pd.DataFrame): The balance data containing 'Date', 'Account', and 'Balance' columns.
+        skip_accounts (list[str], optional): List of account names to exclude from the plot. Defaults to None.
+
+    Returns:
+        plotly.graph_objs.Figure: The resulting Plotly figure.
+    """
+    # Filter out negative balances
     balance_data = balance_data[balance_data["Balance"] >= 0]
+
+    # Exclude specified accounts if any
     if skip_accounts:
         balance_data = balance_data[~balance_data["Account"].isin(skip_accounts)]
 
-    # Convert date to month and ensure it's in a suitable format for grouping
+    # Convert 'Date' to 'Month' in YYYY-MM format
     balance_data["Month"] = (
         pd.to_datetime(balance_data["Date"]).dt.to_period("M").astype(str)
     )
 
-    # Group by month and account, summing balances
+    # Group by 'Month' and 'Account', taking the first balance (assuming one entry per group)
     df = balance_data.groupby(["Month", "Account"])["Balance"].first().reset_index()
+
+    # Calculate total balance per account across all months for global ordering
+    total_balance_per_account = (
+        df.groupby("Account")["Balance"].sum().sort_values(ascending=False)
+    )
+    sorted_accounts = total_balance_per_account.index.tolist()
+
+    # Create a 'Label' column combining Account name and formatted Balance
+    df["Label"] = df.apply(
+        lambda row: f"{row['Account']}: ${row['Balance']/1000:,.0f}k", axis=1
+    )
 
     # Plot using Plotly Express
     fig = px.bar(
@@ -470,21 +494,34 @@ def plot_monthly_total_and_account_balances(
         color="Account",
         title="Monthly Total and Account Balances",
         labels={"Balance": "Total Balance", "Month": "Month", "Account": "Account"},
-        text="Balance",
+        text="Label",  # Use the combined label for text
+        category_orders={"Account": sorted_accounts},  # Apply global ordering
     )
 
-    # Make the bars stacked
+    # Customize the layout for better readability
     fig.update_layout(
-        barmode="stack",
-        xaxis_tickangle=-45,
+        barmode="stack",  # Ensure bars are stacked
+        xaxis_tickangle=-45,  # Rotate x-axis labels for better readability
         xaxis_title="Month",
         yaxis_title="Total Balance",
-        xaxis=dict(type="category"),
+        xaxis=dict(type="category"),  # Ensure x-axis treats 'Month' as categorical
         yaxis=dict(type="linear"),
+        legend_title="Account",
+        title_x=0.5,  # Center the title
     )
 
-    # Optional: Format the balance text on the bars for better readability
-    fig.update_traces(texttemplate="%{text:.2s}", textposition="inside")
+    # Customize text appearance within the bars
+    fig.update_traces(
+        textposition="inside",  # Position text inside each bar segment
+        texttemplate="%{text}",  # Use the 'Label' column for text
+        insidetextanchor="middle",  # Center the text within the segment
+        textfont=dict(color="white", size=10),  # Set text color and size for visibility
+    )
+
+    # Improve layout margins to prevent text cutoff
+    fig.update_layout(
+        margin=dict(l=40, r=40, t=80, b=80),
+    )
 
     return fig
 
