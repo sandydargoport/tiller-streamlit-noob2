@@ -248,14 +248,49 @@ def plot_categories_per_month(
 
 
 def plot_total_spending_per_month(
-    transaction_data: pd.DataFrame, skip_categories: list[str] | None = None
+    transaction_data: pd.DataFrame,
+    skip_categories: list[str] | None = None,
+    n_months_moving_avg: int = 3,
 ) -> plotly.graph_objs.Figure:
+    # Filter and process spending data
     df = _to_spending(transaction_data)
     if skip_categories:
         df = df[~df["Category"].isin(skip_categories)]
+
+    # Convert the Date column to a monthly period
     df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").astype(str)
-    df = df.groupby("Date")["Amount"].sum().reset_index()
-    fig = px.bar(df, x="Date", y="Amount", title="Monthly Spending")
+
+    # Group by month and calculate the total spending per month
+    df_monthly = df.groupby("Date")["Amount"].sum().reset_index()
+
+    # Sort by date to ensure correct moving average calculation
+    df_monthly = df_monthly.sort_values(by="Date")
+
+    # Calculate the moving average over the specified number of months
+    df_monthly["Moving_Avg"] = (
+        df_monthly["Amount"].rolling(window=n_months_moving_avg).mean()
+    )
+
+    # Create the bar plot for monthly spending
+    fig = px.bar(df_monthly, x="Date", y="Amount", title="Monthly Spending")
+
+    # Add a line for the moving average
+    fig.add_scatter(
+        x=df_monthly["Date"],
+        y=df_monthly["Moving_Avg"],
+        mode="lines",
+        name=f"{n_months_moving_avg}-Month Moving Average",
+        line=dict(color="orange", width=2),
+    )
+
+    # Customize the layout
+    fig.update_layout(
+        title="Monthly Spending with Moving Average",
+        xaxis_title="Date",
+        yaxis_title="Amount",
+        xaxis_tickangle=-45,
+    )
+
     return fig
 
 
