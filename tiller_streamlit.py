@@ -301,12 +301,19 @@ def plot_categories_per_month(
             f"Monthly Spending by Category ({n_months_ma}-Month Moving Average)"
         )
 
-    # Create the bar chart
+    # Calculate total spending per category to determine stacking order
+    total_spending_per_category = (
+        df_grouped.groupby("Category")["Amount"].sum().sort_values(ascending=False)
+    )
+    sorted_categories = total_spending_per_category.index.tolist()
+
+    # Create the bar chart with sorted categories
     fig = px.bar(
         df_grouped,
         x="Date",
         y="Amount",
         color="Category",
+        category_orders={"Category": sorted_categories},
         title=plot_title,
         labels={"Amount": "Spending ($)", "Date": "Month"},
         hover_data={"Date": "|%B %Y", "Amount": ":,.2f"},
