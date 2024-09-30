@@ -315,6 +315,7 @@ def plot_categories_per_month(
         color="Category",
         category_orders={"Category": sorted_categories},
         title=plot_title,
+        text="Category",
         labels={"Amount": "Spending ($)", "Date": "Month"},
         hover_data={"Date": "|%B %Y", "Amount": ":,.2f"},
     )
@@ -323,7 +324,7 @@ def plot_categories_per_month(
     fig.update_layout(
         xaxis=dict(tickformat="%b %Y", tickangle=-45),
         yaxis_title="Spending ($)",
-        hovermode="x unified",
+        hovermode="closest",
     )
 
     return fig
