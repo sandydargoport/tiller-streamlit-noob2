@@ -281,14 +281,9 @@ def plot_categories_per_month(
             and latest_date_in_data.year == current_year
         )
 
-        # Check if today is the last day of the month
-        last_day_of_current_month = calendar.monthrange(current_year, current_month)[1]
-        is_month_complete = today.day == last_day_of_current_month
-
-        if is_latest_month_current and not is_month_complete:
+        if is_latest_month_current:
             # Exclude the incomplete current month from the data
             df_grouped = df_grouped[df_grouped["Date"] < latest_date_in_data]
-            plot_title += " (Excluding Incomplete Current Month)"
 
         # Sort the DataFrame by Category and Date to ensure correct rolling calculation
         df_grouped = df_grouped.sort_values(["Category", "Date"])

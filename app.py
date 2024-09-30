@@ -57,10 +57,10 @@ def main():
     categories = sorted(transaction_data["Category"].unique())
 
     # Plot Sections
-    plot_net_worth_section(transaction_data, header)
-    plot_monthly_comparative_spending_section(transaction_data, header)
     plot_monthly_spending_by_category_section(transaction_data, categories, header)
     plot_monthly_spending_section(transaction_data, categories, header)
+    plot_net_worth_section(transaction_data, header)
+    plot_monthly_comparative_spending_section(transaction_data, header)
     plot_histogram_section(transaction_data, categories, header)
     plot_spending_by_subcategory_section(transaction_data, categories, header)
     plot_monthly_income_section(transaction_data, header)
