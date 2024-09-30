@@ -36,19 +36,22 @@ def get_categories() -> tuple[dict[str, str], dict[str, list[str]]]:
     df = sheet_as_df("Categories")
     category_to_group: dict[str, str] = {}
     group_to_category: dict[str, list[str]] = {}
+    category_to_type: dict[str, str] = {}
+
     for i, row in df.iterrows():
         category_to_group[row.Category] = row.Group
+        category_to_type[row.Category] = row.Type
         group_to_category.setdefault(row.Group, []).append(row.Category)
-    return category_to_group, group_to_category
+    return category_to_group, group_to_category, category_to_type
 
 
 def _add_category_group(transaction_data: pd.DataFrame) -> pd.DataFrame:
-    category_to_group, group_to_category = get_categories()
+    category_to_group, group_to_category, category_to_type = get_categories()
     transaction_data["Group"] = transaction_data["Category"].apply(
         lambda x: category_to_group.get(x, "")
     )
     transaction_data["Type"] = transaction_data["Category"].apply(
-        lambda x: category_to_group.get(x, "")
+        lambda x: category_to_type.get(x, "")
     )
     return transaction_data
 

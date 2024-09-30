@@ -62,7 +62,9 @@ def main():
         "Exclude categories from spending", categories, default=["Rent"]
     )
     fig = plot_total_spending_per_month(
-        transaction_data, skip_categories=skip_categories
+        transaction_data,
+        skip_categories=skip_categories,
+        n_months_moving_avg=[3, 6, 12],
     )
     st.plotly_chart(fig)
 
