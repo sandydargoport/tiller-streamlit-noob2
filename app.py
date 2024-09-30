@@ -1,3 +1,5 @@
+# File: app.py
+
 import streamlit as st
 from tiller_streamlit import (
     get_transaction_data_df,
@@ -52,9 +54,33 @@ def main():
     fig = plot_comparative_spending(transaction_data, months_to_compare)
     st.altair_chart(fig)
 
-    header("Monthly Spending by Category")
+    # Allow users to exclude certain categories
     skip_categories = st.multiselect("Exclude categories", categories, default=["Rent"])
-    fig = plot_categories_per_month(transaction_data, skip_categories=skip_categories)
+
+    # Checkbox to enable moving average
+    enable_ma = st.checkbox("Add moving average to each category")
+
+    # Initialize moving average variable
+    n_months_ma = None
+
+    if enable_ma:
+        # Number input for specifying 'N months moving average'
+        n_months_ma = st.number_input(
+            "Number of months for moving average",
+            min_value=2,
+            max_value=12,
+            value=3,
+            step=1,
+            help="Select the number of months for calculating the moving average.",
+        )
+
+    # Pass the moving average parameter to the plotting function
+    fig = plot_categories_per_month(
+        transaction_data,
+        skip_categories=skip_categories,
+        n_months_ma=n_months_ma,  # Ensure this parameter is passed
+    )
+
     st.plotly_chart(fig)
 
     header("Monthly Spending")

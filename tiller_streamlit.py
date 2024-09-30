@@ -1,4 +1,3 @@
-import calendar
 import os
 
 import matplotlib
@@ -6,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import plotly
 import plotly.express as px
+import plotly.graph_objects as go
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -236,18 +236,69 @@ def plot_single_category_by_month(
 
 
 def plot_categories_per_month(
-    transaction_data: pd.DataFrame, skip_categories: list[str] | None = None
+    transaction_data: pd.DataFrame,
+    skip_categories: list[str] | None = None,
+    n_months_ma: int | None = None
 ) -> plotly.graph_objs.Figure:
+    """
+    Plots monthly spending by category with an optional moving average.
+
+    Args:
+        transaction_data (pd.DataFrame): The transaction data.
+        skip_categories (list[str], optional): Categories to exclude. Defaults to None.
+        n_months_ma (int, optional): Number of months for moving average. Defaults to None.
+
+    Returns:
+        plotly.graph_objs.Figure: The resulting Plotly figure.
+    """
+    # Prepare the data
     df = _to_spending(transaction_data)
     if skip_categories:
         df = df[~df["Category"].isin(skip_categories)]
 
-    df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").astype(str)
+    # Convert Date to monthly timestamp and sort
+    df["Date"] = pd.to_datetime(df["Date"]).dt.to_period("M").dt.to_timestamp()
+    df = df.sort_values("Date")
 
-    df = df.groupby(["Date", "Category"])["Amount"].sum().reset_index()
+    # Aggregate spending per month and category
+    df_grouped = df.groupby(["Date", "Category"])["Amount"].sum().reset_index()
+
+    # If moving average is specified, calculate and replace 'Amount' with moving average
+    if n_months_ma and n_months_ma > 1:
+        # Sort the DataFrame by Category and Date to ensure correct rolling calculation
+        df_grouped = df_grouped.sort_values(['Category', 'Date'])
+
+        # Calculate the moving average per Category
+        df_grouped['Moving_Avg'] = df_grouped.groupby('Category')['Amount'].transform(
+            lambda x: x.rolling(window=n_months_ma, min_periods=1).mean()
+        )
+
+        # Replace 'Amount' with 'Moving_Avg' for plotting
+        df_grouped['Amount'] = df_grouped['Moving_Avg']
+
+        # Update the plot title to indicate moving average
+        plot_title = f"Monthly Spending by Category ({n_months_ma}-Month Moving Average)"
+    else:
+        plot_title = "Monthly Spending by Category"
+
+    # Create the bar chart
     fig = px.bar(
-        df, x="Date", y="Amount", color="Category", title="Monthly Spending by Category"
+        df_grouped,
+        x="Date",
+        y="Amount",
+        color="Category",
+        title=plot_title,
+        labels={"Amount": "Spending ($)", "Date": "Month"},
+        hover_data={"Date": "|%B %Y", "Amount": ":,.2f"}
     )
+
+    # Customize layout for better readability
+    fig.update_layout(
+        xaxis=dict(tickformat="%b %Y", tickangle=-45),
+        yaxis_title="Spending ($)",
+        hovermode="x unified"
+    )
+
     return fig
 
 
