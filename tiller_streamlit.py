@@ -46,6 +46,9 @@ def _add_category_group(transaction_data: pd.DataFrame) -> pd.DataFrame:
     transaction_data["Group"] = transaction_data["Category"].apply(
         lambda x: category_to_group.get(x, "")
     )
+    transaction_data["Type"] = transaction_data["Category"].apply(
+        lambda x: category_to_group.get(x, "")
+    )
     return transaction_data
 
 
@@ -74,9 +77,10 @@ def _add_per_category_amount(transaction_data: pd.DataFrame) -> pd.DataFrame:
 def _to_spending(transaction_data: pd.DataFrame) -> pd.DataFrame:
     df = transaction_data[transaction_data.amount_category < 0].copy()
     df = df[
-        (df["Category"] != "Transfer")
+        (df["Type"] != "Transfer")
         & (df["Category"] != "Investments in Stocks")
         & (df["Category"] != "Investments in Crypto")
+        & (df["Category"] != "Credit Card Payment")
     ]
     df["amount_pct"] = df["Amount"] / df["Amount"].sum() * 100
     total = df["Amount"].sum()
@@ -98,6 +102,7 @@ def resampled_balance_history(df: pd.DataFrame) -> pd.DataFrame:
 
     # Sort by 'Account ID' and 'Date'
     df_ = df_.sort_values(by=["Account ID", "Date"])
+    df_.loc[df_["Class"] == "Liability", "Balance"] *= -1
 
     # Extend the DataFrame to include the current date for each account
     current_date = pd.to_datetime("today").normalize()  # Normalize to remove time
@@ -271,9 +276,9 @@ def plot_comparative_spending(df: pd.DataFrame, n_last_months: int = 3) -> alt.C
     )
     df_["Relative Month"] += ", " + df_["Date"].dt.strftime("%Y-%m")
     this_month_str = f"This Month, {most_recent_month.strftime('%Y-%m')}"
-    df_.loc[
-        df_["Relative Month"].str.contains("0 months ago"), "Relative Month"
-    ] = this_month_str
+    df_.loc[df_["Relative Month"].str.contains("0 months ago"), "Relative Month"] = (
+        this_month_str
+    )
     df_ = df_[df_["Date"] >= df_["Date"].max() - pd.DateOffset(months=n_last_months)]
 
     chart = (
